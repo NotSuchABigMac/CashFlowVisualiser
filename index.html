@@ -3,89 +3,244 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cash Flow Forecaster</title>
+    <title>Granular Cash Flow Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-<body class="bg-gray-100 p-8">
-    <div class="max-w-4xl mx-auto bg-white p-6 rounded-xl shadow-md">
-        <h1 class="text-2xl font-bold mb-6 text-gray-800">Cash Flow Forecaster</h1>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script> </head>
+<body class="bg-slate-100 p-6 font-sans text-slate-800">
+
+    <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">Starting Balance ($)</label>
-                    <input type="number" id="startingBalance" value="1000" class="mt-1 block w-full border rounded-md p-2" oninput="updateChart()">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">Monthly Income ($)</label>
-                    <input type="number" id="income" value="3000" class="mt-1 block w-full border rounded-md p-2" oninput="updateChart()">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">Monthly Expenses ($)</label>
-                    <input type="number" id="expenses" value="2500" class="mt-1 block w-full border rounded-md p-2" oninput="updateChart()">
+        <div class="lg:col-span-1 space-y-6">
+            
+            <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
+                <h2 class="font-bold text-lg mb-4 text-slate-700">1. Starting Position</h2>
+                <label class="block text-sm font-semibold text-slate-600 mb-1">Current Balance</label>
+                <div class="flex items-center">
+                    <span class="bg-slate-100 border border-r-0 border-slate-300 p-2 rounded-l text-slate-500">$</span>
+                    <input type="number" id="startBalance" value="2000" class="w-full border border-slate-300 p-2 rounded-r focus:outline-none focus:ring-2 focus:ring-blue-500" onchange="updateApp()">
                 </div>
             </div>
 
-            <div class="md:col-span-2">
-                <canvas id="cashFlowChart"></canvas>
+            <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
+                <h2 class="font-bold text-lg mb-4 text-slate-700">2. Add Line Item</h2>
+                <div class="space-y-3">
+                    <input type="text" id="desc" placeholder="Description (e.g. AWS Bill)" class="w-full border p-2 rounded">
+                    <input type="date" id="date" class="w-full border p-2 rounded">
+                    <input type="number" id="amount" placeholder="Amount" class="w-full border p-2 rounded">
+                    
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="addTransaction('income')" class="bg-emerald-100 text-emerald-700 py-2 rounded font-bold hover:bg-emerald-200 border border-emerald-300">+ Income</button>
+                        <button onclick="addTransaction('expense')" class="bg-rose-100 text-rose-700 py-2 rounded font-bold hover:bg-rose-200 border border-rose-300">- Expense</button>
+                    </div>
+                </div>
+                <div id="errorMsg" class="text-red-500 text-sm mt-2 hidden">Please fill all fields</div>
+            </div>
+
+            <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200 h-96 overflow-y-auto">
+                <h2 class="font-bold text-lg mb-2 text-slate-700">Ledger</h2>
+                <table class="w-full text-sm text-left">
+                    <thead class="text-xs text-slate-500 uppercase bg-slate-50 sticky top-0">
+                        <tr>
+                            <th class="px-2 py-2">Date</th>
+                            <th class="px-2 py-2">Desc</th>
+                            <th class="px-2 py-2 text-right">Amt</th>
+                            <th class="px-2 py-2"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="ledgerBody">
+                        </tbody>
+                </table>
             </div>
         </div>
 
-        <div id="statusAlert" class="p-4 rounded-md text-center font-bold"></div>
+        <div class="lg:col-span-2 space-y-6">
+            <div id="statusCard" class="bg-white p-6 rounded-lg shadow-sm border border-slate-200 flex justify-between items-center">
+                <div>
+                    <h3 class="text-sm text-slate-500 uppercase font-bold tracking-wider">Lowest Projected Balance</h3>
+                    <p id="minBalanceDisplay" class="text-3xl font-bold text-slate-800">--</p>
+                </div>
+                <div id="statusIndicator" class="px-4 py-2 rounded-full font-bold text-sm bg-slate-100">
+                    Calculated
+                </div>
+            </div>
+
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 relative h-[500px]">
+                <canvas id="cfChart"></canvas>
+            </div>
+        </div>
     </div>
 
     <script>
-        let chart;
+        // State
+        let transactions = [
+            { id: 1, desc: 'Rent', date: '2023-11-01', amount: 1200, type: 'expense' },
+            { id: 2, desc: 'Salary', date: '2023-11-15', amount: 3500, type: 'income' },
+            { id: 3, desc: 'Car Rego', date: '2023-11-20', amount: 800, type: 'expense' }
+        ];
 
-        function updateChart() {
-            const start = parseFloat(document.getElementById('startingBalance').value) || 0;
-            const inc = parseFloat(document.getElementById('income').value) || 0;
-            const exp = parseFloat(document.getElementById('expenses').value) || 0;
-            
-            const months = ['Month 1', 'Month 2', 'Month 3', 'Month 4', 'Month 5', 'Month 6'];
-            let currentBalance = start;
-            const dataPoints = [];
+        // Init Date Input to Today
+        document.getElementById('date').valueAsDate = new Date();
 
-            months.forEach(() => {
-                currentBalance += (inc - exp);
-                dataPoints.push(currentBalance);
+        // Chart Instance
+        let myChart = null;
+
+        function addTransaction(type) {
+            const desc = document.getElementById('desc').value;
+            const date = document.getElementById('date').value;
+            const amount = parseFloat(document.getElementById('amount').value);
+            const err = document.getElementById('errorMsg');
+
+            if (!desc || !date || !amount) {
+                err.classList.remove('hidden');
+                return;
+            }
+            err.classList.add('hidden');
+
+            transactions.push({
+                id: Date.now(),
+                desc,
+                date,
+                amount,
+                type
             });
 
-            const ctx = document.getElementById('cashFlowChart').getContext('2d');
+            // Reset inputs
+            document.getElementById('desc').value = '';
+            document.getElementById('amount').value = '';
+            document.getElementById('desc').focus();
             
-            if (chart) chart.destroy();
+            updateApp();
+        }
 
-            chart = new Chart(ctx, {
+        function deleteTrans(id) {
+            transactions = transactions.filter(t => t.id !== id);
+            updateApp();
+        }
+
+        function updateApp() {
+            renderLedger();
+            renderChart();
+        }
+
+        function renderLedger() {
+            const tbody = document.getElementById('ledgerBody');
+            tbody.innerHTML = '';
+
+            // Sort by date for the list
+            const sorted = [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            sorted.forEach(t => {
+                const tr = document.createElement('tr');
+                tr.className = "border-b border-slate-100 hover:bg-slate-50";
+                const isExp = t.type === 'expense';
+                tr.innerHTML = `
+                    <td class="px-2 py-3 text-slate-500">${t.date}</td>
+                    <td class="px-2 py-3 font-medium">${t.desc}</td>
+                    <td class="px-2 py-3 text-right ${isExp ? 'text-rose-600' : 'text-emerald-600'}">
+                        ${isExp ? '-' : '+'}${t.amount}
+                    </td>
+                    <td class="px-2 py-3 text-right">
+                        <button onclick="deleteTrans(${t.id})" class="text-slate-400 hover:text-red-500 font-bold">&times;</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderChart() {
+            const startBal = parseFloat(document.getElementById('startBalance').value) || 0;
+            
+            // 1. Sort transactions strictly by date
+            const sorted = [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            // 2. Build Timeline Data
+            // We start with "Today" (or the earliest date) as the starting point
+            let currentBal = startBal;
+            let labels = ['Start'];
+            let dataPoints = [startBal];
+            let pointColors = ['#94a3b8']; // slate for start
+
+            let minBal = startBal;
+
+            sorted.forEach(t => {
+                labels.push(t.date);
+                
+                if (t.type === 'income') currentBal += t.amount;
+                else currentBal -= t.amount;
+
+                if (currentBal < minBal) minBal = currentBal;
+
+                dataPoints.push(currentBal);
+                pointColors.push(currentBal < 0 ? '#e11d48' : '#10b981'); // Red if negative, Green if positive
+            });
+
+            // 3. Update Status Card
+            const minDisplay = document.getElementById('minBalanceDisplay');
+            const statusInd = document.getElementById('statusIndicator');
+            
+            minDisplay.textContent = "$" + minBal.toLocaleString();
+            if (minBal < 0) {
+                minDisplay.classList.replace('text-slate-800', 'text-rose-600');
+                statusInd.textContent = "CRITICAL: DEFICIT PREDICTED";
+                statusInd.className = "px-4 py-2 rounded-full font-bold text-sm bg-rose-100 text-rose-700 animate-pulse";
+            } else {
+                minDisplay.classList.replace('text-rose-600', 'text-slate-800');
+                statusInd.textContent = "Safe: Positive Cash Flow";
+                statusInd.className = "px-4 py-2 rounded-full font-bold text-sm bg-emerald-100 text-emerald-700";
+            }
+
+            // 4. Render Chart.js
+            const ctx = document.getElementById('cfChart').getContext('2d');
+            
+            if (myChart) myChart.destroy();
+
+            myChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: months,
+                    labels: labels,
                     datasets: [{
-                        label: 'Projected Balance',
+                        label: 'Cash Balance',
                         data: dataPoints,
-                        borderColor: currentBalance >= 0 ? '#10b981' : '#ef4444',
-                        backgroundColor: currentBalance >= 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        pointBackgroundColor: pointColors,
+                        pointRadius: 5,
                         fill: true,
-                        tension: 0.3
+                        stepped: true, // "Stepped" is better for transaction logic
+                    }, {
+                        // Zero Line helper
+                        label: 'Zero Line',
+                        data: Array(labels.length).fill(0),
+                        borderColor: '#ef4444',
+                        borderWidth: 1,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        fill: false
                     }]
                 },
                 options: {
                     responsive: true,
-                    scales: { y: { beginAtZero: false } }
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            grid: { color: '#f1f5f9' }
+                        },
+                        x: {
+                            grid: { display: false }
+                        }
+                    },
+                    interaction: {
+                        intersect: false,
+                        mode: 'index',
+                    },
                 }
             });
-
-            const alert = document.getElementById('statusAlert');
-            if (currentBalance >= 0) {
-                alert.textContent = "Forecast: You're in the green!";
-                alert.className = "p-4 rounded-md text-center font-bold bg-green-100 text-green-700";
-            } else {
-                alert.textContent = "Warning: Projected deficit ahead.";
-                alert.className = "p-4 rounded-md text-center font-bold bg-red-100 text-red-700";
-            }
         }
 
-        updateChart();
+        // Initial render
+        updateApp();
+
     </script>
 </body>
 </html>
