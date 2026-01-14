@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cash Flow Forecaster</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-4xl mx-auto bg-white p-6 rounded-xl shadow-md">
+        <h1 class="text-2xl font-bold mb-6 text-gray-800">Cash Flow Forecaster</h1>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Starting Balance ($)</label>
+                    <input type="number" id="startingBalance" value="1000" class="mt-1 block w-full border rounded-md p-2" oninput="updateChart()">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Monthly Income ($)</label>
+                    <input type="number" id="income" value="3000" class="mt-1 block w-full border rounded-md p-2" oninput="updateChart()">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Monthly Expenses ($)</label>
+                    <input type="number" id="expenses" value="2500" class="mt-1 block w-full border rounded-md p-2" oninput="updateChart()">
+                </div>
+            </div>
+
+            <div class="md:col-span-2">
+                <canvas id="cashFlowChart"></canvas>
+            </div>
+        </div>
+
+        <div id="statusAlert" class="p-4 rounded-md text-center font-bold"></div>
+    </div>
+
+    <script>
+        let chart;
+
+        function updateChart() {
+            const start = parseFloat(document.getElementById('startingBalance').value) || 0;
+            const inc = parseFloat(document.getElementById('income').value) || 0;
+            const exp = parseFloat(document.getElementById('expenses').value) || 0;
+            
+            const months = ['Month 1', 'Month 2', 'Month 3', 'Month 4', 'Month 5', 'Month 6'];
+            let currentBalance = start;
+            const dataPoints = [];
+
+            months.forEach(() => {
+                currentBalance += (inc - exp);
+                dataPoints.push(currentBalance);
+            });
+
+            const ctx = document.getElementById('cashFlowChart').getContext('2d');
+            
+            if (chart) chart.destroy();
+
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: months,
+                    datasets: [{
+                        label: 'Projected Balance',
+                        data: dataPoints,
+                        borderColor: currentBalance >= 0 ? '#10b981' : '#ef4444',
+                        backgroundColor: currentBalance >= 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: { y: { beginAtZero: false } }
+                }
+            });
+
+            const alert = document.getElementById('statusAlert');
+            if (currentBalance >= 0) {
+                alert.textContent = "Forecast: You're in the green!";
+                alert.className = "p-4 rounded-md text-center font-bold bg-green-100 text-green-700";
+            } else {
+                alert.textContent = "Warning: Projected deficit ahead.";
+                alert.className = "p-4 rounded-md text-center font-bold bg-red-100 text-red-700";
+            }
+        }
+
+        updateChart();
+    </script>
+</body>
+</html>
