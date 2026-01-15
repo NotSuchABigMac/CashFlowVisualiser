@@ -3,32 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cash Flow Tracker (Persistent)</title>
+    <title>Private Cash Flow Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔒</text></svg>">
 </head>
-<body class="bg-slate-100 p-6 font-sans text-slate-800">
+<body class="bg-slate-50 p-6 font-sans text-slate-800">
 
-    <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         <div class="lg:col-span-1 space-y-6">
             
-            <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
-                <h2 class="font-bold text-lg mb-4 text-slate-700">1. Starting Position</h2>
-                <div class="flex justify-between items-center mb-2">
-                    <label class="block text-sm font-semibold text-slate-600">Current Balance</label>
-                    <button onclick="clearAll()" class="text-xs text-red-500 hover:underline">Reset All Data</button>
+            <div class="bg-blue-50 p-5 rounded-lg shadow-sm border border-blue-200">
+                <h2 class="font-bold text-lg mb-2 text-blue-800">1. Data Management</h2>
+                <p class="text-xs text-blue-600 mb-3">Your data is stored locally in your browser, not on the server.</p>
+                <div class="flex gap-2">
+                    <button onclick="importDataPrompt()" class="flex-1 bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 transition font-semibold shadow-sm">📂 Import JSON</button>
+                    <button onclick="exportData()" class="flex-1 bg-white text-blue-600 border border-blue-200 px-3 py-2 rounded hover:bg-blue-50 transition font-semibold">💾 Backup</button>
                 </div>
+                <button onclick="clearData()" class="w-full mt-2 text-xs text-red-400 hover:text-red-600 hover:underline text-center">Clear Local Data</button>
+            </div>
+
+            <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
+                <h2 class="font-bold text-lg mb-4 text-slate-700">2. Starting Position</h2>
+                <label class="block text-sm font-semibold text-slate-600 mb-1">Current Bank Balance</label>
                 <div class="flex items-center">
                     <span class="bg-slate-100 border border-r-0 border-slate-300 p-2 rounded-l text-slate-500">$</span>
-                    <input type="number" id="startBalance" class="w-full border border-slate-300 p-2 rounded-r focus:outline-none focus:ring-2 focus:ring-blue-500" onchange="saveAndRender()">
+                    <input type="number" id="startBalance" value="0" class="w-full border border-slate-300 p-2 rounded-r focus:outline-none focus:ring-2 focus:ring-blue-500" onchange="saveAndRender()">
                 </div>
             </div>
 
             <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
-                <h2 class="font-bold text-lg mb-4 text-slate-700">2. Add Line Item</h2>
+                <h2 class="font-bold text-lg mb-4 text-slate-700">3. Add Transaction</h2>
                 <div class="space-y-3">
-                    <input type="text" id="desc" placeholder="Description (e.g. AWS Bill)" class="w-full border p-2 rounded">
+                    <input type="text" id="desc" placeholder="Description" class="w-full border p-2 rounded">
                     <input type="date" id="date" class="w-full border p-2 rounded">
                     <input type="number" id="amount" placeholder="Amount" class="w-full border p-2 rounded">
                     
@@ -38,14 +46,13 @@
                     </div>
 
                     <div class="grid grid-cols-2 gap-2">
-                        <button onclick="addTransaction('income')" class="bg-emerald-100 text-emerald-700 py-2 rounded font-bold hover:bg-emerald-200 border border-emerald-300">+ Income</button>
-                        <button onclick="addTransaction('expense')" class="bg-rose-100 text-rose-700 py-2 rounded font-bold hover:bg-rose-200 border border-rose-300">- Expense</button>
+                        <button onclick="addTransaction('income')" class="bg-emerald-100 text-emerald-700 py-2 rounded font-bold hover:bg-emerald-200 border border-emerald-300 transition">+ Income</button>
+                        <button onclick="addTransaction('expense')" class="bg-rose-100 text-rose-700 py-2 rounded font-bold hover:bg-rose-200 border border-rose-300 transition">- Expense</button>
                     </div>
                 </div>
-                <div id="errorMsg" class="text-red-500 text-sm mt-2 hidden">Please fill all fields</div>
             </div>
 
-            <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200 h-96 overflow-y-auto">
+            <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200 h-[400px] overflow-y-auto">
                 <h2 class="font-bold text-lg mb-2 text-slate-700">Ledger</h2>
                 <table class="w-full text-sm text-left">
                     <thead class="text-xs text-slate-500 uppercase bg-slate-50 sticky top-0">
@@ -62,50 +69,104 @@
         </div>
 
         <div class="lg:col-span-2 space-y-6">
-            <div id="statusCard" class="bg-white p-6 rounded-lg shadow-sm border border-slate-200 flex justify-between items-center">
+            <div id="statusCard" class="bg-white p-6 rounded-lg shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
                 <div>
-                    <h3 class="text-sm text-slate-500 uppercase font-bold tracking-wider">Lowest Point</h3>
+                    <h3 class="text-sm text-slate-500 uppercase font-bold tracking-wider">Lowest Projected Balance</h3>
                     <p id="minBalanceDisplay" class="text-3xl font-bold text-slate-800">--</p>
                 </div>
-                <div id="statusIndicator" class="px-4 py-2 rounded-full font-bold text-sm bg-slate-100">
-                    Calculated
-                </div>
+                <div id="statusIndicator" class="px-4 py-2 rounded-full font-bold text-sm bg-slate-100">Waiting for Data...</div>
             </div>
 
-            <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 relative h-[500px]">
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 relative h-[600px]">
                 <canvas id="cfChart"></canvas>
             </div>
         </div>
     </div>
 
     <script>
-        // --- Persistence Layer ---
-        const STORE_KEY = 'cashflow_v1_transactions';
-        const BAL_KEY = 'cashflow_v1_balance';
+        // --- CONSTANTS ---
+        const STORE_KEY = 'cashflow_v3_private_data';
+        const BAL_KEY = 'cashflow_v3_private_balance';
 
-        // Load data or defaults
-        let transactions = JSON.parse(localStorage.getItem(STORE_KEY)) || [
-             { id: 1, desc: 'Example Rent', date: new Date().toISOString().split('T')[0], amount: 1000, type: 'expense' }
-        ];
-        
-        let savedBalance = localStorage.getItem(BAL_KEY);
-        if (savedBalance === null) savedBalance = "2000";
-        document.getElementById('startBalance').value = savedBalance;
-
-        // Init Date Input
-        document.getElementById('date').valueAsDate = new Date();
+        // --- STATE ---
+        let transactions = [];
         let myChart = null;
+
+        // --- INIT ---
+        function init() {
+            // Load from LocalStorage
+            const savedData = localStorage.getItem(STORE_KEY);
+            const savedBal = localStorage.getItem(BAL_KEY);
+
+            if (savedData) {
+                try {
+                    transactions = JSON.parse(savedData);
+                } catch(e) { console.error("Data corrupted"); }
+            } else {
+                // Initialize empty or with a dummy example if totally fresh
+                transactions = [];
+            }
+
+            if (savedBal) {
+                document.getElementById('startBalance').value = savedBal;
+            }
+
+            document.getElementById('date').valueAsDate = new Date();
+            renderAll();
+        }
+
+        // --- CORE FUNCTIONS ---
 
         function saveData() {
             localStorage.setItem(STORE_KEY, JSON.stringify(transactions));
             localStorage.setItem(BAL_KEY, document.getElementById('startBalance').value);
         }
 
-        function clearAll() {
-            if(confirm("Clear all data?")) {
+        function clearData() {
+            if(confirm("Are you sure? This will wipe all local data.")) {
+                localStorage.removeItem(STORE_KEY);
+                localStorage.removeItem(BAL_KEY);
                 transactions = [];
                 document.getElementById('startBalance').value = 0;
-                saveAndRender();
+                renderAll();
+            }
+        }
+
+        function exportData() {
+            if(transactions.length === 0) {
+                alert("No data to export.");
+                return;
+            }
+            const dataStr = JSON.stringify(transactions);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            const exportName = 'cashflow_private_backup.json';
+            
+            const link = document.createElement('a');
+            link.setAttribute('href', dataUri);
+            link.setAttribute('download', exportName);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        }
+
+        function importDataPrompt() {
+            // Use a simple prompt for text input
+            const str = prompt("Paste your JSON data array here:");
+            if(!str) return;
+
+            try {
+                const parsed = JSON.parse(str);
+                if(Array.isArray(parsed)) {
+                    if(confirm(`Successfully parsed ${parsed.length} items. Import them?`)) {
+                        transactions = parsed;
+                        saveData();
+                        renderAll();
+                    }
+                } else {
+                    alert("Invalid format: Data must be a JSON Array [ ... ]");
+                }
+            } catch(e) {
+                alert("Error parsing JSON. Please ensure you copied the exact string.");
             }
         }
 
@@ -114,152 +175,6 @@
             const dateStr = document.getElementById('date').value;
             const amount = parseFloat(document.getElementById('amount').value);
             const isRecurring = document.getElementById('recurring').checked;
-            const err = document.getElementById('errorMsg');
 
             if (!desc || !dateStr || !amount) {
-                err.classList.remove('hidden');
-                return;
-            }
-            err.classList.add('hidden');
-
-            const loopCount = isRecurring ? 3 : 1;
-            let baseDate = new Date(dateStr);
-
-            for(let i = 0; i < loopCount; i++) {
-                // Calculate date for this iteration
-                let nextDate = new Date(baseDate);
-                nextDate.setMonth(baseDate.getMonth() + i);
-                
-                transactions.push({
-                    id: Date.now() + i, // ensure unique ID
-                    desc: i > 0 ? `${desc} (Month ${i+1})` : desc,
-                    date: nextDate.toISOString().split('T')[0],
-                    amount,
-                    type
-                });
-            }
-
-            // Reset inputs
-            document.getElementById('desc').value = '';
-            document.getElementById('amount').value = '';
-            document.getElementById('recurring').checked = false; 
-            document.getElementById('desc').focus();
-            
-            saveAndRender();
-        }
-
-        function deleteTrans(id) {
-            transactions = transactions.filter(t => t.id !== id);
-            saveAndRender();
-        }
-
-        function saveAndRender() {
-            saveData();
-            renderLedger();
-            renderChart();
-        }
-
-        function renderLedger() {
-            const tbody = document.getElementById('ledgerBody');
-            tbody.innerHTML = '';
-            const sorted = [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
-
-            sorted.forEach(t => {
-                const tr = document.createElement('tr');
-                tr.className = "border-b border-slate-100 hover:bg-slate-50";
-                const isExp = t.type === 'expense';
-                tr.innerHTML = `
-                    <td class="px-2 py-3 text-slate-500">${t.date}</td>
-                    <td class="px-2 py-3 font-medium">${t.desc}</td>
-                    <td class="px-2 py-3 text-right ${isExp ? 'text-rose-600' : 'text-emerald-600'}">
-                        ${isExp ? '-' : '+'}${t.amount}
-                    </td>
-                    <td class="px-2 py-3 text-right">
-                        <button onclick="deleteTrans(${t.id})" class="text-slate-400 hover:text-red-500 font-bold">&times;</button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
-        function renderChart() {
-            const startBal = parseFloat(document.getElementById('startBalance').value) || 0;
-            const sorted = [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
-
-            let currentBal = startBal;
-            let labels = ['Start'];
-            let dataPoints = [startBal];
-            let pointColors = ['#94a3b8'];
-            let minBal = startBal;
-
-            sorted.forEach(t => {
-                labels.push(t.date);
-                if (t.type === 'income') currentBal += t.amount;
-                else currentBal -= t.amount;
-
-                if (currentBal < minBal) minBal = currentBal;
-
-                dataPoints.push(currentBal);
-                pointColors.push(currentBal < 0 ? '#e11d48' : '#10b981');
-            });
-
-            // Update Status
-            const minDisplay = document.getElementById('minBalanceDisplay');
-            const statusInd = document.getElementById('statusIndicator');
-            minDisplay.textContent = "$" + minBal.toLocaleString();
-            
-            if (minBal < 0) {
-                minDisplay.classList.replace('text-slate-800', 'text-rose-600');
-                statusInd.textContent = "DEFICIT WARNING";
-                statusInd.className = "px-4 py-2 rounded-full font-bold text-sm bg-rose-100 text-rose-700 animate-pulse";
-            } else {
-                minDisplay.classList.replace('text-rose-600', 'text-slate-800');
-                statusInd.textContent = "Positive";
-                statusInd.className = "px-4 py-2 rounded-full font-bold text-sm bg-emerald-100 text-emerald-700";
-            }
-
-            // Chart
-            const ctx = document.getElementById('cfChart').getContext('2d');
-            if (myChart) myChart.destroy();
-
-            myChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Projected Cash',
-                        data: dataPoints,
-                        borderColor: '#3b82f6',
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        pointBackgroundColor: pointColors,
-                        pointRadius: 5,
-                        fill: true,
-                        stepped: true,
-                    }, {
-                        label: 'Zero Line',
-                        data: Array(labels.length).fill(0),
-                        borderColor: '#ef4444',
-                        borderWidth: 1,
-                        borderDash: [5, 5],
-                        pointRadius: 0,
-                        fill: false
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: { grid: { color: '#f1f5f9' } },
-                        x: { grid: { display: false } }
-                    },
-                    interaction: { intersect: false, mode: 'index' },
-                }
-            });
-        }
-
-        // Initial Load
-        renderLedger();
-        renderChart();
-    </script>
-</body>
-</html>
+                alert("Please fill all fields");
