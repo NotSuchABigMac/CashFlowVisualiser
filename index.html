@@ -3,27 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Private Cash Flow Tracker</title>
+    <title>Private Cash Flow Tracker + Gemini AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔒</text></svg>">
+    <!-- Favicon using inline SVG -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💸</text></svg>">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        /* Custom scrollbar for ledger */
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
+            background: #94a3b6;
+        }
+        .markdown-body ul { list-style-type: disc; margin-left: 1.5em; margin-bottom: 1em; }
+        .markdown-body p { margin-bottom: 1em; }
+        .markdown-body strong { color: #1e293b; font-weight: 700; }
+        
+        /* Loading animation */
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
 </head>
-<body class="bg-slate-50 p-6 font-sans text-slate-800">
+<body class="bg-slate-50 p-4 md:p-6 font-sans text-slate-800">
 
     <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
         
+        <!-- Left Panel: Controls -->
         <div class="lg:col-span-1 space-y-6">
             
+            <!-- Data Management -->
             <div class="bg-blue-50 p-5 rounded-lg shadow-sm border border-blue-200">
                 <h2 class="font-bold text-lg mb-2 text-blue-800">1. Data Management</h2>
-                <p class="text-xs text-blue-600 mb-3">Your data is stored locally in your browser.</p>
+                <p class="text-xs text-blue-600 mb-3">Your data is stored locally. AI features use Google Gemini.</p>
                 <div class="flex gap-2">
-                    <button onclick="importDataPrompt()" class="flex-1 bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 transition font-semibold shadow-sm">📂 Import JSON</button>
-                    <button onclick="exportData()" class="flex-1 bg-white text-blue-600 border border-blue-200 px-3 py-2 rounded hover:bg-blue-50 transition font-semibold">💾 Backup</button>
+                    <button onclick="importDataPrompt()" class="flex-1 bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 transition font-semibold shadow-sm text-sm">📂 Import JSON</button>
+                    <button onclick="exportData()" class="flex-1 bg-white text-blue-600 border border-blue-200 px-3 py-2 rounded hover:bg-blue-50 transition font-semibold text-sm">💾 Backup</button>
                 </div>
                 <button onclick="clearData()" class="w-full mt-2 text-xs text-red-400 hover:text-red-600 hover:underline text-center">Clear Local Data</button>
             </div>
 
+            <!-- Starting Position -->
             <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
                 <h2 class="font-bold text-lg mb-4 text-slate-700">2. Starting Position</h2>
                 <label class="block text-sm font-semibold text-slate-600 mb-1">Current Bank Balance</label>
@@ -33,12 +68,26 @@
                 </div>
             </div>
 
+            <!-- AI Smart Add -->
+            <div class="bg-gradient-to-br from-indigo-50 to-purple-50 p-5 rounded-lg shadow-sm border border-indigo-100">
+                <div class="flex justify-between items-center mb-2">
+                    <h2 class="font-bold text-lg text-indigo-800">✨ AI Smart Add</h2>
+                </div>
+                <p class="text-xs text-indigo-600 mb-3">Type naturally (e.g., "Paid $50 for internet today")</p>
+                <textarea id="aiInput" class="w-full border border-indigo-200 rounded p-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:outline-none mb-3" rows="2" placeholder="Describe transaction..."></textarea>
+                <button onclick="processSmartAdd()" id="aiAddBtn" class="w-full bg-indigo-600 text-white py-2 rounded font-bold hover:bg-indigo-700 transition flex justify-center items-center gap-2">
+                    <span>Process with Gemini</span>
+                </button>
+                <div id="aiError" class="text-xs text-red-500 mt-2 hidden"></div>
+            </div>
+
+            <!-- Manual Add Item -->
             <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
-                <h2 class="font-bold text-lg mb-4 text-slate-700">3. Add Transaction</h2>
+                <h2 class="font-bold text-lg mb-4 text-slate-700">3. Manual Add</h2>
                 <div class="space-y-3">
-                    <input type="text" id="desc" placeholder="Description" class="w-full border p-2 rounded">
-                    <input type="date" id="date" class="w-full border p-2 rounded">
-                    <input type="number" id="amount" placeholder="Amount" class="w-full border p-2 rounded">
+                    <input type="text" id="desc" placeholder="Description" class="w-full border p-2 rounded text-sm">
+                    <input type="date" id="date" class="w-full border p-2 rounded text-sm">
+                    <input type="number" id="amount" placeholder="Amount" class="w-full border p-2 rounded text-sm">
                     
                     <div class="flex items-center gap-2 py-1">
                         <input type="checkbox" id="recurring" class="w-4 h-4 text-blue-600 rounded">
@@ -46,21 +95,22 @@
                     </div>
 
                     <div class="grid grid-cols-2 gap-2">
-                        <button onclick="addTransaction('income')" class="bg-emerald-100 text-emerald-700 py-2 rounded font-bold hover:bg-emerald-200 border border-emerald-300 transition">+ Income</button>
-                        <button onclick="addTransaction('expense')" class="bg-rose-100 text-rose-700 py-2 rounded font-bold hover:bg-rose-200 border border-rose-300 transition">- Expense</button>
+                        <button onclick="addTransaction('income')" class="bg-emerald-100 text-emerald-700 py-2 rounded font-bold hover:bg-emerald-200 border border-emerald-300 transition text-sm">+ Income</button>
+                        <button onclick="addTransaction('expense')" class="bg-rose-100 text-rose-700 py-2 rounded font-bold hover:bg-rose-200 border border-rose-300 transition text-sm">- Expense</button>
                     </div>
                 </div>
             </div>
 
-            <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200 h-[400px] overflow-y-auto">
+            <!-- Ledger -->
+            <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200 h-[400px] overflow-y-auto custom-scroll">
                 <h2 class="font-bold text-lg mb-2 text-slate-700">Ledger</h2>
                 <table class="w-full text-sm text-left">
-                    <thead class="text-xs text-slate-500 uppercase bg-slate-50 sticky top-0">
+                    <thead class="text-xs text-slate-500 uppercase bg-slate-50 sticky top-0 z-10 shadow-sm">
                         <tr>
-                            <th class="px-2 py-2">Date</th>
-                            <th class="px-2 py-2">Desc</th>
-                            <th class="px-2 py-2 text-right">Amt</th>
-                            <th class="px-2 py-2"></th>
+                            <th class="px-2 py-2 bg-slate-50">Date</th>
+                            <th class="px-2 py-2 bg-slate-50">Desc</th>
+                            <th class="px-2 py-2 bg-slate-50 text-right">Amt</th>
+                            <th class="px-2 py-2 bg-slate-50"></th>
                         </tr>
                     </thead>
                     <tbody id="ledgerBody"></tbody>
@@ -68,17 +118,45 @@
             </div>
         </div>
 
+        <!-- Right Panel: Graph & AI Analysis -->
         <div class="lg:col-span-2 space-y-6">
-            <div id="statusCard" class="bg-white p-6 rounded-lg shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
-                <div>
-                    <h3 class="text-sm text-slate-500 uppercase font-bold tracking-wider">Lowest Projected Balance</h3>
-                    <p id="minBalanceDisplay" class="text-3xl font-bold text-slate-800">--</p>
+            
+            <!-- Status Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div id="statusCard" class="bg-white p-6 rounded-lg shadow-sm border border-slate-200 flex flex-col justify-center">
+                    <h3 class="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">Lowest Projected Balance</h3>
+                    <div class="flex items-center gap-4">
+                        <p id="minBalanceDisplay" class="text-3xl font-bold text-slate-800">--</p>
+                        <div id="statusIndicator" class="px-3 py-1 rounded-full font-bold text-xs bg-slate-100 border border-slate-200">
+                            Waiting...
+                        </div>
+                    </div>
                 </div>
-                <div id="statusIndicator" class="px-4 py-2 rounded-full font-bold text-sm bg-slate-100">Waiting for Data...</div>
+                
+                <!-- AI Analyst Button Card -->
+                <div class="bg-gradient-to-br from-indigo-600 to-purple-700 p-6 rounded-lg shadow-md text-white flex flex-col justify-between relative overflow-hidden">
+                    <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-10 rounded-full"></div>
+                    <div>
+                        <h3 class="font-bold text-lg">✨ AI Financial Analyst</h3>
+                        <p class="text-indigo-100 text-sm opacity-90">Get insights, find risks, and see projection summaries.</p>
+                    </div>
+                    <button onclick="analyzeFinances()" id="analyzeBtn" class="mt-4 bg-white text-indigo-700 py-2 px-4 rounded font-bold hover:bg-indigo-50 transition shadow-sm flex items-center justify-center gap-2">
+                        <span>Analyze My Data</span>
+                    </button>
+                </div>
             </div>
 
-            <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 relative h-[600px]">
+            <!-- Graph -->
+            <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 relative h-[450px]">
                 <canvas id="cfChart"></canvas>
+            </div>
+
+            <!-- AI Analysis Result Area -->
+            <div id="analysisResultPanel" class="hidden bg-white p-6 rounded-lg shadow-sm border border-indigo-100">
+                <h3 class="font-bold text-lg text-indigo-800 mb-4 flex items-center gap-2">
+                    <span>✨ Gemini Analysis</span>
+                </h3>
+                <div id="analysisContent" class="markdown-body text-sm text-slate-700 leading-relaxed"></div>
             </div>
         </div>
     </div>
@@ -87,6 +165,7 @@
         // --- CONSTANTS ---
         const STORE_KEY = 'cashflow_v3_private_data';
         const BAL_KEY = 'cashflow_v3_private_balance';
+        const apiKey = ""; // Injected by environment
 
         // --- STATE ---
         let transactions = [];
@@ -95,16 +174,13 @@
         // --- INIT ---
         function init() {
             try {
-                // Load from LocalStorage
                 const savedData = localStorage.getItem(STORE_KEY);
                 const savedBal = localStorage.getItem(BAL_KEY);
 
                 if (savedData) {
                     try {
                         const parsed = JSON.parse(savedData);
-                        if (Array.isArray(parsed)) {
-                            transactions = parsed;
-                        }
+                        if (Array.isArray(parsed)) transactions = parsed;
                     } catch(e) { console.error("Data corrupted"); }
                 }
 
@@ -112,18 +188,158 @@
                     document.getElementById('startBalance').value = savedBal;
                 }
 
-                // Default Date
                 document.getElementById('date').valueAsDate = new Date();
-                
-                // Render
                 renderAll();
             } catch (err) {
                 console.error("Initialization Error:", err);
             }
         }
 
-        // --- CORE FUNCTIONS ---
+        // --- GEMINI API HELPERS ---
+        async function callGemini(prompt) {
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }]
+                    })
+                });
 
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error?.message || 'API Error');
+                }
+
+                const data = await response.json();
+                return data.candidates[0].content.parts[0].text;
+            } catch (error) {
+                console.error("Gemini API Error:", error);
+                throw error;
+            }
+        }
+
+        // --- FEATURE 1: SMART ADD ---
+        async function processSmartAdd() {
+            const input = document.getElementById('aiInput').value;
+            const btn = document.getElementById('aiAddBtn');
+            const errDiv = document.getElementById('aiError');
+            
+            if (!input.trim()) return;
+
+            // UI Loading State
+            const originalBtnText = btn.innerHTML;
+            btn.innerHTML = `<div class="loader mr-2"></div> Processing...`;
+            btn.disabled = true;
+            errDiv.classList.add('hidden');
+
+            try {
+                const today = new Date().toISOString().split('T')[0];
+                const prompt = `
+                    You are a financial data parser helper. 
+                    Today's date is ${today}.
+                    User Input: "${input}"
+                    
+                    Instructions:
+                    1. Extract the transaction details: description, date (YYYY-MM-DD), amount (number), and type ('income' or 'expense').
+                    2. If the user implies a future relative date (e.g. "next friday"), calculate the specific YYYY-MM-DD.
+                    3. If multiple transactions are mentioned, extract all of them.
+                    4. Return ONLY a valid JSON array of objects. No markdown formatting, no code blocks, just raw JSON.
+                    
+                    Example output format:
+                    [{"desc": "Rent", "date": "2024-05-01", "amount": 1200, "type": "expense"}]
+                `;
+
+                let resultText = await callGemini(prompt);
+                
+                // Cleanup result if Gemini wraps in markdown code blocks
+                resultText = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
+
+                const newItems = JSON.parse(resultText);
+
+                if (Array.isArray(newItems)) {
+                    let count = 0;
+                    newItems.forEach(item => {
+                        if (item.desc && item.date && item.amount && item.type) {
+                            transactions.push({
+                                id: Date.now() + Math.random(),
+                                desc: item.desc,
+                                date: item.date,
+                                amount: parseFloat(item.amount),
+                                type: item.type.toLowerCase()
+                            });
+                            count++;
+                        }
+                    });
+
+                    if (count > 0) {
+                        saveAndRender();
+                        document.getElementById('aiInput').value = ''; // Clear input on success
+                    } else {
+                        throw new Error("Could not parse transaction details.");
+                    }
+                } else {
+                    throw new Error("Invalid response format.");
+                }
+
+            } catch (err) {
+                errDiv.textContent = "Error: " + err.message;
+                errDiv.classList.remove('hidden');
+            } finally {
+                btn.innerHTML = originalBtnText;
+                btn.disabled = false;
+            }
+        }
+
+        // --- FEATURE 2: AI ANALYST ---
+        async function analyzeFinances() {
+            const btn = document.getElementById('analyzeBtn');
+            const resultPanel = document.getElementById('analysisResultPanel');
+            const contentDiv = document.getElementById('analysisContent');
+            
+            // UI Loading State
+            const originalBtnText = btn.innerHTML;
+            btn.innerHTML = `<div class="loader border-indigo-200 border-t-indigo-600"></div> Analyzing...`;
+            btn.disabled = true;
+            resultPanel.classList.add('hidden');
+
+            try {
+                // Prepare Data Summary (limit to 50 items to keep token count reasonable if list is huge)
+                const startBal = document.getElementById('startBalance').value;
+                const sorted = [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
+                const dataSummary = JSON.stringify(sorted.slice(0, 50)); 
+                
+                const prompt = `
+                    You are a helpful financial advisor. 
+                    Current Bank Balance: $${startBal}.
+                    Transaction Ledger (JSON): ${dataSummary}
+
+                    Please analyze this data and provide:
+                    1. A brief summary of the cash flow health.
+                    2. Identification of the biggest expenses.
+                    3. Specific warnings if the balance is projected to go negative or get dangerously low.
+                    4. One or two actionable tips for savings.
+
+                    Format the response in Markdown. Keep it friendly, professional, and concise. Use emojis where appropriate.
+                `;
+
+                const analysis = await callGemini(prompt);
+                
+                // Render Markdown
+                contentDiv.innerHTML = marked.parse(analysis);
+                resultPanel.classList.remove('hidden');
+                // Scroll to result
+                resultPanel.scrollIntoView({ behavior: 'smooth' });
+
+            } catch (err) {
+                alert("Analysis failed: " + err.message);
+            } finally {
+                btn.innerHTML = originalBtnText;
+                btn.disabled = false;
+            }
+        }
+
+        // --- CORE FUNCTIONS (Legacy) ---
         function saveData() {
             localStorage.setItem(STORE_KEY, JSON.stringify(transactions));
             localStorage.setItem(BAL_KEY, document.getElementById('startBalance').value);
@@ -140,17 +356,11 @@
         }
 
         function exportData() {
-            if(transactions.length === 0) {
-                alert("No data to export.");
-                return;
-            }
-            const dataStr = JSON.stringify(transactions);
-            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-            const exportName = 'cashflow_private_backup.json';
-            
+            if(transactions.length === 0) { alert("No data"); return; }
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(JSON.stringify(transactions));
             const link = document.createElement('a');
             link.setAttribute('href', dataUri);
-            link.setAttribute('download', exportName);
+            link.setAttribute('download', 'cashflow_backup.json');
             document.body.appendChild(link);
             link.click();
             link.remove();
@@ -159,56 +369,40 @@
         function importDataPrompt() {
             const str = prompt("Paste your JSON data array here:");
             if(!str) return;
-
             try {
                 const parsed = JSON.parse(str);
                 if(Array.isArray(parsed)) {
-                    if(confirm(`Successfully parsed ${parsed.length} items. Import them?`)) {
+                    if(confirm(`Import ${parsed.length} items?`)) {
                         transactions = parsed;
                         saveAndRender();
                     }
-                } else {
-                    alert("Invalid format: Data must be a JSON Array [ ... ]");
                 }
-            } catch(e) {
-                alert("Error parsing JSON. Ensure you copied the full code including brackets.");
-            }
+            } catch(e) { alert("Invalid JSON"); }
         }
 
         function addTransaction(type) {
             const desc = document.getElementById('desc').value;
             const dateStr = document.getElementById('date').value;
-            const amountVal = document.getElementById('amount').value;
-            const amount = parseFloat(amountVal);
+            const amount = parseFloat(document.getElementById('amount').value);
             const isRecurring = document.getElementById('recurring').checked;
 
-            if (!desc || !dateStr || !amountVal) {
-                alert("Please fill all fields");
-                return;
-            }
+            if (!desc || !dateStr || !amount) { alert("Fill all fields"); return; }
 
             const loopCount = isRecurring ? 3 : 1;
-            let baseDate = new Date(dateStr);
-
             for(let i = 0; i < loopCount; i++) {
-                let nextDate = new Date(baseDate);
-                nextDate.setMonth(baseDate.getMonth() + i);
-                
+                let d = new Date(dateStr);
+                d.setMonth(d.getMonth() + i);
                 transactions.push({
-                    id: Date.now() + i, 
+                    id: Date.now() + i,
                     desc: i > 0 ? `${desc} (Month ${i+1})` : desc,
-                    date: nextDate.toISOString().split('T')[0],
+                    date: d.toISOString().split('T')[0],
                     amount,
                     type
                 });
             }
-
-            // Cleanup Inputs
+            
             document.getElementById('desc').value = '';
             document.getElementById('amount').value = '';
-            document.getElementById('recurring').checked = false; 
-            document.getElementById('desc').focus();
-            
             saveAndRender();
         }
 
@@ -217,17 +411,8 @@
             saveAndRender();
         }
 
-        function saveAndRender() {
-            saveData();
-            renderAll();
-        }
-
-        function renderAll() {
-            renderLedger();
-            renderChart();
-        }
-
-        // --- RENDERERS ---
+        function saveAndRender() { saveData(); renderAll(); }
+        function renderAll() { renderLedger(); renderChart(); }
 
         function renderLedger() {
             const tbody = document.getElementById('ledgerBody');
@@ -235,22 +420,22 @@
             const sorted = [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
 
             if (sorted.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-slate-400 italic">No transactions yet. Click Import or Add Item.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-slate-400 italic">No transactions.</td></tr>';
                 return;
             }
 
             sorted.forEach(t => {
                 const tr = document.createElement('tr');
-                tr.className = "border-b border-slate-100 hover:bg-slate-50 transition";
+                tr.className = "border-b border-slate-100 hover:bg-slate-50 transition group";
                 const isExp = t.type === 'expense';
                 tr.innerHTML = `
                     <td class="px-2 py-3 text-slate-500 whitespace-nowrap">${t.date}</td>
-                    <td class="px-2 py-3 font-medium">${t.desc}</td>
+                    <td class="px-2 py-3 font-medium text-slate-700">${t.desc}</td>
                     <td class="px-2 py-3 text-right ${isExp ? 'text-rose-600' : 'text-emerald-600'}">
-                        ${isExp ? '-' : '+'}${t.amount}
+                        ${isExp ? '-' : '+'}${t.amount.toLocaleString()}
                     </td>
                     <td class="px-2 py-3 text-right">
-                        <button onclick="deleteTrans(${t.id})" class="text-slate-400 hover:text-red-500 font-bold px-2 py-1">&times;</button>
+                        <button onclick="deleteTrans(${t.id})" class="text-slate-300 hover:text-red-500 font-bold px-2 py-1 opacity-0 group-hover:opacity-100 transition">&times;</button>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -267,35 +452,24 @@
                 return;
             }
 
-            // Generate Timeline
             let currentBal = startBal;
-            let labels = [];
-            let dataPoints = [];
-            let pointColors = [];
+            let labels = ["Start"];
+            let dataPoints = [startBal];
+            let pointColors = ["#94a3b8"];
             let minBal = startBal;
             let lowestDate = "Start";
 
-            // Add starting point
-            labels.push("Start");
-            dataPoints.push(startBal);
-            pointColors.push("#94a3b8");
-
             sorted.forEach(t => {
-                labels.push(`${t.date} | ${t.desc}`); 
-                
+                labels.push(`${t.date} | ${t.desc}`);
                 if (t.type === 'income') currentBal += t.amount;
                 else currentBal -= t.amount;
 
-                if (currentBal < minBal) {
-                    minBal = currentBal;
-                    lowestDate = t.date;
-                }
+                if (currentBal < minBal) { minBal = currentBal; lowestDate = t.date; }
 
                 dataPoints.push(currentBal);
                 pointColors.push(currentBal < 0 ? '#e11d48' : '#10b981');
             });
 
-            // Status Update
             const minDisplay = document.getElementById('minBalanceDisplay');
             const statusInd = document.getElementById('statusIndicator');
             minDisplay.textContent = "$" + minBal.toLocaleString();
@@ -303,26 +477,18 @@
             if (minBal < 0) {
                 minDisplay.className = 'text-3xl font-bold text-rose-600';
                 statusInd.innerHTML = `⚠️ Low on ${lowestDate}`;
-                statusInd.className = "px-4 py-2 rounded-full font-bold text-sm bg-rose-100 text-rose-700 animate-pulse border border-rose-200";
+                statusInd.className = "px-3 py-1 rounded-full font-bold text-xs bg-rose-100 text-rose-700 animate-pulse border border-rose-200";
             } else {
                 minDisplay.className = 'text-3xl font-bold text-slate-800';
-                statusInd.textContent = "✅ Positive Cash Flow";
-                statusInd.className = "px-4 py-2 rounded-full font-bold text-sm bg-emerald-100 text-emerald-700 border border-emerald-200";
+                statusInd.textContent = "✅ Positive";
+                statusInd.className = "px-3 py-1 rounded-full font-bold text-xs bg-emerald-100 text-emerald-700 border border-emerald-200";
             }
 
-            // Chart Render
             if (myChart) myChart.destroy();
-
-            // Safety check for Chart.js
-            if (typeof Chart === 'undefined') {
-                console.error("Chart.js failed to load");
-                return;
-            }
-
             myChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: labels.map(l => l.split(' | ')[0]), // X-axis just date
+                    labels: labels.map(l => l.split(' | ')[0]),
                     datasets: [{
                         label: 'Projected Balance',
                         data: dataPoints,
@@ -330,14 +496,13 @@
                         backgroundColor: 'rgba(59, 130, 246, 0.1)',
                         pointBackgroundColor: pointColors,
                         pointRadius: 4,
-                        pointHoverRadius: 6,
                         fill: true,
-                        stepped: true, 
+                        stepped: true
                     }, {
-                        label: 'Zero Line',
+                        label: 'Zero',
                         data: Array(labels.length).fill(0),
                         borderColor: '#ef4444',
-                        borderWidth: 2,
+                        borderWidth: 1,
                         borderDash: [5, 5],
                         pointRadius: 0,
                         fill: false
@@ -347,18 +512,13 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        y: { 
-                            grid: { color: '#f1f5f9' },
-                            ticks: { callback: function(value) { return '$' + value; } } 
-                        },
-                        x: { 
-                            ticks: { maxRotation: 45, minRotation: 45 }
-                        }
+                        y: { ticks: { callback: v => '$' + v } },
+                        x: { ticks: { maxRotation: 45, minRotation: 45 } }
                     },
                     plugins: {
                         tooltip: {
                             callbacks: {
-                                title: (items) => labels[items[0].dataIndex], 
+                                title: (items) => labels[items[0].dataIndex],
                                 label: (item) => `Balance: $${item.raw.toLocaleString()}`
                             }
                         }
@@ -367,9 +527,7 @@
             });
         }
 
-        // Start
         window.addEventListener('DOMContentLoaded', init);
-
     </script>
 </body>
 </html>
