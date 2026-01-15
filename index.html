@@ -6,6 +6,8 @@
     <title>Private Cash Flow Tracker + Gemini AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Compression library for sharing links -->
+    <script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"></script>
     <!-- Favicon using inline SVG -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💸</text></svg>">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -50,11 +52,14 @@
             <!-- Data Management -->
             <div class="bg-blue-50 p-5 rounded-lg shadow-sm border border-blue-200">
                 <h2 class="font-bold text-lg mb-2 text-blue-800">1. Data Management</h2>
-                <p class="text-xs text-blue-600 mb-3">Your data is stored locally. AI features use Google Gemini.</p>
-                <div class="flex gap-2">
-                    <button onclick="importDataPrompt()" class="flex-1 bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 transition font-semibold shadow-sm text-sm">📂 Import JSON</button>
-                    <button onclick="exportData()" class="flex-1 bg-white text-blue-600 border border-blue-200 px-3 py-2 rounded hover:bg-blue-50 transition font-semibold text-sm">💾 Backup</button>
+                <p class="text-xs text-blue-600 mb-3">Your data is stored locally. Share Links contain encoded data.</p>
+                <div class="flex gap-2 mb-2">
+                    <button onclick="importDataPrompt()" class="flex-1 bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 transition font-semibold shadow-sm text-sm">📂 Import</button>
+                    <button onclick="exportData()" class="flex-1 bg-white text-blue-600 border border-blue-200 px-3 py-2 rounded hover:bg-blue-50 transition font-semibold text-sm">💾 Save File</button>
                 </div>
+                <button onclick="generateShareLink()" class="w-full bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-2 rounded hover:bg-indigo-200 transition font-semibold text-sm flex justify-center items-center gap-2">
+                    🔗 Copy Share Link
+                </button>
                 <button onclick="clearData()" class="w-full mt-2 text-xs text-red-400 hover:text-red-600 hover:underline text-center">Clear Local Data</button>
             </div>
 
@@ -136,13 +141,19 @@
                 <!-- AI Analyst Button Card -->
                 <div class="bg-gradient-to-br from-indigo-600 to-purple-700 p-6 rounded-lg shadow-md text-white flex flex-col justify-between relative overflow-hidden">
                     <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white opacity-10 rounded-full"></div>
-                    <div>
-                        <h3 class="font-bold text-lg">✨ AI Financial Analyst</h3>
-                        <p class="text-indigo-100 text-sm opacity-90">Get insights, find risks, and see projection summaries.</p>
+                    <div class="relative z-10">
+                        <h3 class="font-bold text-lg flex items-center gap-2">
+                            ✨ AI Financial Analyst
+                        </h3>
+                        <p class="text-indigo-100 text-xs opacity-90 mb-3">Ask questions or get a general summary.</p>
+                        
+                        <input type="text" id="aiQuestion" placeholder="Ask a question (e.g., Can I afford a car in May?)" 
+                            class="w-full text-slate-800 px-3 py-2 rounded text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-indigo-300 shadow-sm placeholder-slate-400">
+                        
+                        <button onclick="analyzeFinances()" id="analyzeBtn" class="w-full bg-white text-indigo-700 py-2 px-4 rounded font-bold hover:bg-indigo-50 transition shadow-sm flex items-center justify-center gap-2 text-sm">
+                            <span>Ask Gemini / Analyze</span>
+                        </button>
                     </div>
-                    <button onclick="analyzeFinances()" id="analyzeBtn" class="mt-4 bg-white text-indigo-700 py-2 px-4 rounded font-bold hover:bg-indigo-50 transition shadow-sm flex items-center justify-center gap-2">
-                        <span>Analyze My Data</span>
-                    </button>
                 </div>
             </div>
 
@@ -154,7 +165,7 @@
             <!-- AI Analysis Result Area -->
             <div id="analysisResultPanel" class="hidden bg-white p-6 rounded-lg shadow-sm border border-indigo-100">
                 <h3 class="font-bold text-lg text-indigo-800 mb-4 flex items-center gap-2">
-                    <span>✨ Gemini Analysis</span>
+                    <span>✨ Gemini Response</span>
                 </h3>
                 <div id="analysisContent" class="markdown-body text-sm text-slate-700 leading-relaxed"></div>
             </div>
@@ -174,6 +185,31 @@
         // --- INIT ---
         function init() {
             try {
+                // Check for Shared Link Data first
+                const urlParams = new URLSearchParams(window.location.search);
+                const sharedData = urlParams.get('data');
+
+                if (sharedData) {
+                    try {
+                        const decompressed = LZString.decompressFromEncodedURIComponent(sharedData);
+                        if (decompressed) {
+                            const parsedShared = JSON.parse(decompressed);
+                            if (confirm("Shared data found in link! Load it? (This will overwrite current data)")) {
+                                transactions = parsedShared.transactions || [];
+                                document.getElementById('startBalance').value = parsedShared.balance || 0;
+                                saveAndRender();
+                                // Clean URL
+                                window.history.replaceState({}, document.title, window.location.pathname);
+                                return; // Stop loading local storage
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Link load error", e);
+                        alert("Invalid or corrupted share link.");
+                    }
+                }
+
+                // Normal Load
                 const savedData = localStorage.getItem(STORE_KEY);
                 const savedBal = localStorage.getItem(BAL_KEY);
 
@@ -227,7 +263,6 @@
             
             if (!input.trim()) return;
 
-            // UI Loading State
             const originalBtnText = btn.innerHTML;
             btn.innerHTML = `<div class="loader mr-2"></div> Processing...`;
             btn.disabled = true;
@@ -251,10 +286,7 @@
                 `;
 
                 let resultText = await callGemini(prompt);
-                
-                // Cleanup result if Gemini wraps in markdown code blocks
                 resultText = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
-
                 const newItems = JSON.parse(resultText);
 
                 if (Array.isArray(newItems)) {
@@ -274,7 +306,7 @@
 
                     if (count > 0) {
                         saveAndRender();
-                        document.getElementById('aiInput').value = ''; // Clear input on success
+                        document.getElementById('aiInput').value = ''; 
                     } else {
                         throw new Error("Could not parse transaction details.");
                     }
@@ -291,44 +323,60 @@
             }
         }
 
-        // --- FEATURE 2: AI ANALYST ---
+        // --- FEATURE 2: AI ANALYST (UPDATED) ---
         async function analyzeFinances() {
             const btn = document.getElementById('analyzeBtn');
             const resultPanel = document.getElementById('analysisResultPanel');
             const contentDiv = document.getElementById('analysisContent');
+            const userQuestion = document.getElementById('aiQuestion').value.trim();
             
-            // UI Loading State
             const originalBtnText = btn.innerHTML;
             btn.innerHTML = `<div class="loader border-indigo-200 border-t-indigo-600"></div> Analyzing...`;
             btn.disabled = true;
             resultPanel.classList.add('hidden');
 
             try {
-                // Prepare Data Summary (limit to 50 items to keep token count reasonable if list is huge)
                 const startBal = document.getElementById('startBalance').value;
                 const sorted = [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
-                const dataSummary = JSON.stringify(sorted.slice(0, 50)); 
+                // Limit data context size for best performance
+                const dataSummary = JSON.stringify(sorted.slice(0, 70)); 
                 
-                const prompt = `
-                    You are a helpful financial advisor. 
-                    Current Bank Balance: $${startBal}.
-                    Transaction Ledger (JSON): ${dataSummary}
+                let prompt = "";
 
-                    Please analyze this data and provide:
-                    1. A brief summary of the cash flow health.
-                    2. Identification of the biggest expenses.
-                    3. Specific warnings if the balance is projected to go negative or get dangerously low.
-                    4. One or two actionable tips for savings.
+                if (userQuestion) {
+                    // Scenario: Specific User Question
+                    prompt = `
+                        You are a helpful financial advisor.
+                        Current Bank Balance: $${startBal}.
+                        Transaction Ledger (JSON): ${dataSummary}
 
-                    Format the response in Markdown. Keep it friendly, professional, and concise. Use emojis where appropriate.
-                `;
+                        User Question: "${userQuestion}"
+
+                        Please answer the user's question directly and specifically based on their provided data.
+                        Use numbers from the data to back up your answer.
+                        Format in Markdown.
+                    `;
+                } else {
+                    // Scenario: General Analysis
+                    prompt = `
+                        You are a helpful financial advisor. 
+                        Current Bank Balance: $${startBal}.
+                        Transaction Ledger (JSON): ${dataSummary}
+
+                        Please analyze this data and provide:
+                        1. A brief summary of cash flow health.
+                        2. Identification of big expenses.
+                        3. Warnings if balance projects negative.
+                        4. One actionable tip.
+
+                        Format in Markdown. Keep it concise.
+                    `;
+                }
 
                 const analysis = await callGemini(prompt);
                 
-                // Render Markdown
                 contentDiv.innerHTML = marked.parse(analysis);
                 resultPanel.classList.remove('hidden');
-                // Scroll to result
                 resultPanel.scrollIntoView({ behavior: 'smooth' });
 
             } catch (err) {
@@ -336,6 +384,37 @@
             } finally {
                 btn.innerHTML = originalBtnText;
                 btn.disabled = false;
+            }
+        }
+
+        // --- FEATURE 3: SHARE LINK ---
+        function generateShareLink() {
+            const payload = {
+                transactions: transactions,
+                balance: document.getElementById('startBalance').value
+            };
+            
+            try {
+                const jsonStr = JSON.stringify(payload);
+                const compressed = LZString.compressToEncodedURIComponent(jsonStr);
+                
+                // Construct URL. Handles both file:// and http://
+                const baseUrl = window.location.href.split('?')[0];
+                const shareUrl = `${baseUrl}?data=${compressed}`;
+                
+                // Copy to clipboard
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(shareUrl).then(() => {
+                        alert("Link copied to clipboard!\n\nWarning: This link contains your financial data. Share carefully.");
+                    }).catch(err => {
+                        prompt("Could not auto-copy. Copy this link:", shareUrl);
+                    });
+                } else {
+                     prompt("Copy this link:", shareUrl);
+                }
+            } catch(e) {
+                console.error(e);
+                alert("Error generating link.");
             }
         }
 
