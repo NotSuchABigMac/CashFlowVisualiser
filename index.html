@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Granular Cash Flow Tracker</title>
+    <title>Cash Flow Tracker (Persistent)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script> </head>
+</head>
 <body class="bg-slate-100 p-6 font-sans text-slate-800">
 
     <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -15,10 +15,13 @@
             
             <div class="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
                 <h2 class="font-bold text-lg mb-4 text-slate-700">1. Starting Position</h2>
-                <label class="block text-sm font-semibold text-slate-600 mb-1">Current Balance</label>
+                <div class="flex justify-between items-center mb-2">
+                    <label class="block text-sm font-semibold text-slate-600">Current Balance</label>
+                    <button onclick="clearAll()" class="text-xs text-red-500 hover:underline">Reset All Data</button>
+                </div>
                 <div class="flex items-center">
                     <span class="bg-slate-100 border border-r-0 border-slate-300 p-2 rounded-l text-slate-500">$</span>
-                    <input type="number" id="startBalance" value="2000" class="w-full border border-slate-300 p-2 rounded-r focus:outline-none focus:ring-2 focus:ring-blue-500" onchange="updateApp()">
+                    <input type="number" id="startBalance" class="w-full border border-slate-300 p-2 rounded-r focus:outline-none focus:ring-2 focus:ring-blue-500" onchange="saveAndRender()">
                 </div>
             </div>
 
@@ -29,6 +32,11 @@
                     <input type="date" id="date" class="w-full border p-2 rounded">
                     <input type="number" id="amount" placeholder="Amount" class="w-full border p-2 rounded">
                     
+                    <div class="flex items-center gap-2 py-1">
+                        <input type="checkbox" id="recurring" class="w-4 h-4 text-blue-600 rounded">
+                        <label for="recurring" class="text-sm text-slate-600">Repeat for 3 months</label>
+                    </div>
+
                     <div class="grid grid-cols-2 gap-2">
                         <button onclick="addTransaction('income')" class="bg-emerald-100 text-emerald-700 py-2 rounded font-bold hover:bg-emerald-200 border border-emerald-300">+ Income</button>
                         <button onclick="addTransaction('expense')" class="bg-rose-100 text-rose-700 py-2 rounded font-bold hover:bg-rose-200 border border-rose-300">- Expense</button>
@@ -48,8 +56,7 @@
                             <th class="px-2 py-2"></th>
                         </tr>
                     </thead>
-                    <tbody id="ledgerBody">
-                        </tbody>
+                    <tbody id="ledgerBody"></tbody>
                 </table>
             </div>
         </div>
@@ -57,7 +64,7 @@
         <div class="lg:col-span-2 space-y-6">
             <div id="statusCard" class="bg-white p-6 rounded-lg shadow-sm border border-slate-200 flex justify-between items-center">
                 <div>
-                    <h3 class="text-sm text-slate-500 uppercase font-bold tracking-wider">Lowest Projected Balance</h3>
+                    <h3 class="text-sm text-slate-500 uppercase font-bold tracking-wider">Lowest Point</h3>
                     <p id="minBalanceDisplay" class="text-3xl font-bold text-slate-800">--</p>
                 </div>
                 <div id="statusIndicator" class="px-4 py-2 rounded-full font-bold text-sm bg-slate-100">
@@ -72,53 +79,82 @@
     </div>
 
     <script>
-        // State
-        let transactions = [
-            { id: 1, desc: 'Rent', date: '2023-11-01', amount: 1200, type: 'expense' },
-            { id: 2, desc: 'Salary', date: '2023-11-15', amount: 3500, type: 'income' },
-            { id: 3, desc: 'Car Rego', date: '2023-11-20', amount: 800, type: 'expense' }
+        // --- Persistence Layer ---
+        const STORE_KEY = 'cashflow_v1_transactions';
+        const BAL_KEY = 'cashflow_v1_balance';
+
+        // Load data or defaults
+        let transactions = JSON.parse(localStorage.getItem(STORE_KEY)) || [
+             { id: 1, desc: 'Example Rent', date: new Date().toISOString().split('T')[0], amount: 1000, type: 'expense' }
         ];
+        
+        let savedBalance = localStorage.getItem(BAL_KEY);
+        if (savedBalance === null) savedBalance = "2000";
+        document.getElementById('startBalance').value = savedBalance;
 
-        // Init Date Input to Today
+        // Init Date Input
         document.getElementById('date').valueAsDate = new Date();
-
-        // Chart Instance
         let myChart = null;
+
+        function saveData() {
+            localStorage.setItem(STORE_KEY, JSON.stringify(transactions));
+            localStorage.setItem(BAL_KEY, document.getElementById('startBalance').value);
+        }
+
+        function clearAll() {
+            if(confirm("Clear all data?")) {
+                transactions = [];
+                document.getElementById('startBalance').value = 0;
+                saveAndRender();
+            }
+        }
 
         function addTransaction(type) {
             const desc = document.getElementById('desc').value;
-            const date = document.getElementById('date').value;
+            const dateStr = document.getElementById('date').value;
             const amount = parseFloat(document.getElementById('amount').value);
+            const isRecurring = document.getElementById('recurring').checked;
             const err = document.getElementById('errorMsg');
 
-            if (!desc || !date || !amount) {
+            if (!desc || !dateStr || !amount) {
                 err.classList.remove('hidden');
                 return;
             }
             err.classList.add('hidden');
 
-            transactions.push({
-                id: Date.now(),
-                desc,
-                date,
-                amount,
-                type
-            });
+            const loopCount = isRecurring ? 3 : 1;
+            let baseDate = new Date(dateStr);
+
+            for(let i = 0; i < loopCount; i++) {
+                // Calculate date for this iteration
+                let nextDate = new Date(baseDate);
+                nextDate.setMonth(baseDate.getMonth() + i);
+                
+                transactions.push({
+                    id: Date.now() + i, // ensure unique ID
+                    desc: i > 0 ? `${desc} (Month ${i+1})` : desc,
+                    date: nextDate.toISOString().split('T')[0],
+                    amount,
+                    type
+                });
+            }
 
             // Reset inputs
             document.getElementById('desc').value = '';
             document.getElementById('amount').value = '';
+            document.getElementById('recurring').checked = false; 
             document.getElementById('desc').focus();
             
-            updateApp();
+            saveAndRender();
         }
 
         function deleteTrans(id) {
             transactions = transactions.filter(t => t.id !== id);
-            updateApp();
+            saveAndRender();
         }
 
-        function updateApp() {
+        function saveAndRender() {
+            saveData();
             renderLedger();
             renderChart();
         }
@@ -126,8 +162,6 @@
         function renderLedger() {
             const tbody = document.getElementById('ledgerBody');
             tbody.innerHTML = '';
-
-            // Sort by date for the list
             const sorted = [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
 
             sorted.forEach(t => {
@@ -150,49 +184,42 @@
 
         function renderChart() {
             const startBal = parseFloat(document.getElementById('startBalance').value) || 0;
-            
-            // 1. Sort transactions strictly by date
             const sorted = [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
 
-            // 2. Build Timeline Data
-            // We start with "Today" (or the earliest date) as the starting point
             let currentBal = startBal;
             let labels = ['Start'];
             let dataPoints = [startBal];
-            let pointColors = ['#94a3b8']; // slate for start
-
+            let pointColors = ['#94a3b8'];
             let minBal = startBal;
 
             sorted.forEach(t => {
                 labels.push(t.date);
-                
                 if (t.type === 'income') currentBal += t.amount;
                 else currentBal -= t.amount;
 
                 if (currentBal < minBal) minBal = currentBal;
 
                 dataPoints.push(currentBal);
-                pointColors.push(currentBal < 0 ? '#e11d48' : '#10b981'); // Red if negative, Green if positive
+                pointColors.push(currentBal < 0 ? '#e11d48' : '#10b981');
             });
 
-            // 3. Update Status Card
+            // Update Status
             const minDisplay = document.getElementById('minBalanceDisplay');
             const statusInd = document.getElementById('statusIndicator');
-            
             minDisplay.textContent = "$" + minBal.toLocaleString();
+            
             if (minBal < 0) {
                 minDisplay.classList.replace('text-slate-800', 'text-rose-600');
-                statusInd.textContent = "CRITICAL: DEFICIT PREDICTED";
+                statusInd.textContent = "DEFICIT WARNING";
                 statusInd.className = "px-4 py-2 rounded-full font-bold text-sm bg-rose-100 text-rose-700 animate-pulse";
             } else {
                 minDisplay.classList.replace('text-rose-600', 'text-slate-800');
-                statusInd.textContent = "Safe: Positive Cash Flow";
+                statusInd.textContent = "Positive";
                 statusInd.className = "px-4 py-2 rounded-full font-bold text-sm bg-emerald-100 text-emerald-700";
             }
 
-            // 4. Render Chart.js
+            // Chart
             const ctx = document.getElementById('cfChart').getContext('2d');
-            
             if (myChart) myChart.destroy();
 
             myChart = new Chart(ctx, {
@@ -200,16 +227,15 @@
                 data: {
                     labels: labels,
                     datasets: [{
-                        label: 'Cash Balance',
+                        label: 'Projected Cash',
                         data: dataPoints,
                         borderColor: '#3b82f6',
                         backgroundColor: 'rgba(59, 130, 246, 0.1)',
                         pointBackgroundColor: pointColors,
                         pointRadius: 5,
                         fill: true,
-                        stepped: true, // "Stepped" is better for transaction logic
+                        stepped: true,
                     }, {
-                        // Zero Line helper
                         label: 'Zero Line',
                         data: Array(labels.length).fill(0),
                         borderColor: '#ef4444',
@@ -223,24 +249,17 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        y: {
-                            grid: { color: '#f1f5f9' }
-                        },
-                        x: {
-                            grid: { display: false }
-                        }
+                        y: { grid: { color: '#f1f5f9' } },
+                        x: { grid: { display: false } }
                     },
-                    interaction: {
-                        intersect: false,
-                        mode: 'index',
-                    },
+                    interaction: { intersect: false, mode: 'index' },
                 }
             });
         }
 
-        // Initial render
-        updateApp();
-
+        // Initial Load
+        renderLedger();
+        renderChart();
     </script>
 </body>
 </html>
